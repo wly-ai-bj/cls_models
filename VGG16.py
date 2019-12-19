@@ -97,7 +97,7 @@ def main():
 
     model = VGG(1000)
 
-    x = Variable(torch.rand(8,3,224,224))
+    x = Variable(torch.rand((8,3,224,224)))
     writer = SummaryWriter(log_dir=log_path,comment='VGG16')
     writer.add_graph(model,(x,))
     writer.close()
