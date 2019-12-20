@@ -7,16 +7,22 @@ from torch.autograd import Variable
 import os
 
 def conv7x7(in_channels, out_channels, stride=2, padding=3):
-    return nn.Conv2d(in_channels, out_channels, kernel_size=7, stride=stride, padding=padding, dilation=1, groups=1, bias=True)
+    return nn.Conv2d(in_channels, out_channels, kernel_size=7, stride=stride, padding=padding, dilation=1, groups=1, bias=False)
 
 def conv5x5(in_channels, out_channels, stride=1, padding=2):
-    return nn.Conv2d(in_channels, out_channels, kernel_size=5, stride=stride, padding=padding, dilation=1, groups=1, bias=True)
+    return nn.Conv2d(in_channels, out_channels, kernel_size=5, stride=stride, padding=padding, dilation=1, groups=1, bias=False)
 
 def conv3x3(in_channels, out_channels, stride=1,padding=1):
     return nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, dilation=1, groups=1, bias=False)
 
 def conv1x1(in_channels, out_channels,stride=1):
     return nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, padding=0, dilation=1, groups=1, bias=False)
+
+def conv1xn(in_channels, out_channels, kernel_size, padding):
+    return nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=1, groups=1, bias=False)
+
+def convnx1(in_channels, out_channels, kernel_size, padding):
+    return nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, dilation=1, groups=1, bias=False)
 
 def bn(num_features):
     return nn.BatchNorm2d(num_features, eps=1e-5, momentum=0.1, affine=True, track_running_stats=True)
@@ -80,7 +86,191 @@ class Inception_v1(nn.Module):
         out = torch.cat([out1,out2,out3,out4],dim=1)
         return out
 
-# class Inception_v2(nn.Module):
+class Inception_v2_1(nn.Module):
+    def __init__(self,in_channels,out_channels,stride):
+        super(Inception_v1,self).__init__()
+        self.conv1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[0]),
+            bn(out_channels[0]),
+            nn.ReLU()
+        )
+        self.conv2_1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[1][0]),
+            bn(out_channels[1][0]),
+            nn.ReLU()
+        )
+        self.conv2_2 = nn.Sequential(
+            conv3x3(out_channels[1][0],out_channels[1][1]),
+            bn(out_channels[1][1]),
+            nn.ReLU()
+        )
+        self.conv3_1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[2][0]),
+            bn(out_channels[2][0]),
+            nn.ReLU()
+        )
+        self.conv3_2 = nn.Sequential(
+            conv3x3(out_channels[2][0],out_channels[2][1]),
+            bn(out_channels[2][1]),
+            nn.ReLU(),
+            conv3x3(out_channels[2][1],out_channels[2][1], stride=stride,padding=1),
+            bn(out_channels[2][1]),
+            nn.ReLU()
+        )
+        self.maxpool = maxpool(stride=stride,1)
+        self.conv4 = nn.Sequential(
+            conv1x1(in_channels,out_channels[3]),
+            bn(out_channels[3]),
+            nn.ReLU()
+        )
+        
+    def forward(self,x):
+        out1 = self.conv1(x)
+
+        out2 = self.conv2_1(x)
+        out2 = self.conv2_2(out2)
+
+        out3 = self.conv3_1(x)
+        out3 = self.conv3_2(out3)
+
+        out4 = self.maxpool(x)
+        out4 = self.conv4(out4)
+
+        out = torch.cat([out1,out2,out3,out4],dim=1)
+        return out
+
+
+class Inception_v2_2(nn.Module):
+    def __init__(self,in_channels,out_channels,kernel_frac_conv):
+        super(Inception_v1,self).__init__()
+        self.conv1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[0]),
+            bn(out_channels[0]),
+            nn.ReLU()
+        )
+        self.conv2_1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[1][0]),
+            bn(out_channels[1][0]),
+            nn.ReLU()
+        )
+        self.conv2_2 = nn.Sequential(
+            conv1xn(out_channels[1][0],out_channels[1][1],(1,kernel_frac_conv)),
+            bn(out_channels[1][1]),
+            nn.ReLU()
+            convnx1(out_channels[1][1],out_channels[1][1],(kernel_frac_conv,1)),
+            bn(out_channels[1][1]),
+            nn.ReLU()
+        )
+        self.conv3_1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[2][0]),
+            bn(out_channels[2][0]),
+            nn.ReLU()
+        )
+        self.conv3_2 = nn.Sequential(
+            conv1xn(out_channels[2][0],out_channels[2][1],(1,kernel_frac_conv)),
+            bn(out_channels[2][1]),
+            nn.ReLU(),
+            convnx1(out_channels[2][1],out_channels[2][1],(kernel_frac_conv,1)),
+            bn(out_channels[2][1]),
+            nn.ReLU(),
+            conv1xn(out_channels[2][1],out_channels[2][1],(1,kernel_frac_conv)),
+            bn(out_channels[2][1]),
+            nn.ReLU(),
+            convnx1(out_channels[2][1],out_channels[2][1],(kernel_frac_conv,1)),
+            bn(out_channels[2][1]),
+            nn.ReLU()
+        )
+        self.maxpool = maxpool(1,1)
+        self.conv4 = nn.Sequential(
+            conv1x1(in_channels,out_channels[3]),
+            bn(out_channels[3]),
+            nn.ReLU()
+        )
+        
+    def forward(self,x):
+        out1 = self.conv1(x)
+
+        out2 = self.conv2_1(x)
+        out2 = self.conv2_2(out2)
+
+        out3 = self.conv3_1(x)
+        out3 = self.conv3_2(out3)
+
+        out4 = self.maxpool(x)
+        out4 = self.conv4(out4)
+
+        out = torch.cat([out1,out2,out3,out4],dim=1)
+        return out
+
+
+class Inception_v2_3(nn.Module):
+    def __init__(self,in_channels,out_channels,kernel_frac_conv):
+        super(Inception_v1,self).__init__()
+        self.conv1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[0]),
+            bn(out_channels[0]),
+            nn.ReLU()
+        )
+        self.conv2_1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[1][0]),
+            bn(out_channels[1][0]),
+            nn.ReLU()
+        )
+        self.conv2_2_1 = nn.Sequential(
+            conv1xn(out_channels[1][0],out_channels[1][1],(1,kernel_frac_conv)),
+            bn(out_channels[1][1]),
+            nn.ReLU()
+        )
+        self.conv2_2_2 = nn.Sequential(
+            convnx1(out_channels[1][1],out_channels[1][1],(kernel_frac_conv,1)),
+            bn(out_channels[1][1]),
+            nn.ReLU()
+        )
+
+        self.conv3_1 = nn.Sequential(
+            conv1x1(in_channels,out_channels[2][0]),
+            bn(out_channels[2][0]),
+            nn.ReLU()
+        )
+        self.conv3_2 = nn.Sequential(
+            conv3x3(out_channels[2][0],out_channels[2][1]),
+            bn(out_channels[2][1]),
+            nn.ReLU()
+        )
+        self.conv3_3_1 = nn.Sequential(
+            conv1xn(out_channels[2][1],out_channels[2][1],(1,kernel_frac_conv)),
+            bn(out_channels[2][1]),
+            nn.ReLU()
+        )
+        self.conv3_3_2 = nn.Sequential(
+            convnx1(out_channels[2][1],out_channels[2][1],(kernel_frac_conv,1)),
+            bn(out_channels[2][1]),
+            nn.ReLU()
+        )
+        self.maxpool = maxpool(1,1)
+        self.conv4 = nn.Sequential(
+            conv1x1(in_channels,out_channels[3]),
+            bn(out_channels[3]),
+            nn.ReLU()
+        )
+        
+    def forward(self,x):
+        out1 = self.conv1(x)
+
+        out2 = self.conv2_1(x)
+        out2_1 = self.conv2_2_1(out2)
+        out2_2 = self.conv2_2_2(out2)
+
+        out3 = self.conv3_1(x)
+        out3 = self.conv3_2(out3)
+        out3_1 = self.conv3_3_1(out3)
+        out3_2 = self.conv3_3_2(out3)
+
+        out4 = self.maxpool(x)
+        out4 = self.conv4(out4)
+
+        out = torch.cat([out1,out2_1,out2_2,out3_1,out3_2,out4],dim=1)
+        return out
 
 
 class GoogLeNet(nn.Module):
